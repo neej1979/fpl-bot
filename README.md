@@ -26,19 +26,3 @@ Odds-based projections
 Multi-GW chip planning
 
 ILP-based optimizer
-
-yaml
-Copy
-Edit
-
----
-
-## **Initialise + push to GitHub**
-```bash
-cd /path/to/fpl-bot
-git init
-git add .
-git commit -m "Initial commit - FPL Bot Lite"
-git branch -M main
-git remote add origin git@github.com:YOUR-USER/fpl-bot.git
-git push -u origin main
