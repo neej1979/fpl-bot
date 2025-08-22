@@ -1,0 +1,3 @@
+# Test configuration file for CI/CD
+bearer_token: "test_token_for_testing"
+# Add any other required config fields here with test values

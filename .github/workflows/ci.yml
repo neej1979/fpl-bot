@@ -1,13 +1,56 @@
 name: CI
+
 on:
-  push: { branches: [ main, feat/** ] }
+  push:
+    branches: [ main, master ]
   pull_request:
+    branches: [ main, master ]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.10" }
-      - run: pip install -r requirements.txt
-      - run: pytest -q
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        # Install your project dependencies
+        pip install requests pyyaml
+        # If you have a requirements.txt file, use this instead:
+        # pip install -r requirements.txt
+    
+    - name: Create test config
+      run: |
+        # Just copy the example config - your tests don't make real API calls anyway
+        cp config.example.yaml config.yaml
+    
+    - name: Create test config
+      run: |
+        cp config.example.yaml config.yaml
+        # Or create a minimal config for testing:
+        # echo "bearer_token: test_token_for_ci" > config.yaml
+    
+    - name: Run tests
+      run: |
+        pytest -v --cov=. --cov-report=term-missing
+    
+    - name: Upload coverage reports
+      if: matrix.python-version == '3.10'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
