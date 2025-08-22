@@ -2,7 +2,28 @@
 import os, sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
+import shutil
 from types import SimpleNamespace
+
+# Setup test config before any imports that might need it
+def setup_test_config():
+    """Ensure config.yaml exists for tests"""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(root_dir, "config.yaml")
+    example_config = os.path.join(root_dir, "config.example.yaml")
+    
+    if not os.path.exists(config_path):
+        if os.path.exists(example_config):
+            shutil.copy(example_config, config_path)
+            print(f"Created config.yaml from config.example.yaml for testing")
+        else:
+            # Create a minimal config if example doesn't exist
+            with open(config_path, 'w') as f:
+                f.write("bearer_token: test_token_for_ci\n")
+            print(f"Created minimal config.yaml for testing")
+
+# Run this before importing modules that need config
+setup_test_config()
 
 class FakeClient:
     """
