@@ -6,3 +6,4 @@ venv/
 *.log
 *.cache
 credentials.json
+config.yaml

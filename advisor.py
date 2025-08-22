@@ -1,9 +1,35 @@
 #!/usr/bin/env python3
-import argparse, statistics
+import statistics
 from dataclasses import dataclass
 from typing import Dict, Any, List, Tuple
+import os, yaml, requests  # <-- add requests here
 from fpl_client import FPLClient, SnapshotClient
 
+# ---------- config ----------
+def load_config() -> dict:
+    # First try same folder as this file; then parent (repo root)
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(here, "config.yaml"),
+        os.path.join(os.path.dirname(here), "config.yaml"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            with open(p, "r") as f:
+                return yaml.safe_load(f)
+    raise FileNotFoundError("config.yaml not found next to advisor.py or in repo root.")
+
+config = load_config()
+TEAM_ID       = config["team_id"]
+HORIZON       = config["horizon"]
+SNAPSHOT_DIR  = config.get("snapshot_dir", None)
+
+# NEW: optional auth + headers from config (for pre-deadline access)
+AUTH_HEADER   = config.get("auth_header", "")   # put your "Bearer eyJ..." string in config.yaml
+USER_AGENT    = config.get("user_agent", None)  # optional
+REFERER       = config.get("referer", None)     # optional
+
+# ---------- existing helpers ----------
 def resolve_picks_with_fallback(client, bootstrap, team_id:int, event_id:int):
     """Try current GW picks; if fails (e.g., pre-season), fallback to last finished GW."""
     try:
@@ -76,20 +102,43 @@ def suggest_captain_and_bench(projs:List[PlayerProj]) -> Tuple[PlayerProj, List[
     captain=max(starters, key=lambda p: p.exp_points)
     return captain, bench
 
+# ---------- main ----------
 def main():
-    ap=argparse.ArgumentParser()
-    ap.add_argument("--team-id", type=int, required=True)
-    ap.add_argument("--horizon", type=int, default=3)
-    ap.add_argument("--snapshot-dir", type=str, default=None, help="Offline snapshot directory")
-    args=ap.parse_args()
+    # Use config values (no argparse)
+    snapshot_dir = SNAPSHOT_DIR
+    team_id = TEAM_ID
+    horizon = HORIZON
 
-    client = SnapshotClient(args.snapshot_dir) if args.snapshot_dir else FPLClient()
+    # BUILD THE CLIENT:
+    # - If you set snapshot_dir in config, we use offline snapshot data.
+    # - Otherwise we use live API, and (optionally) pass your auth token + headers.
+    if snapshot_dir:
+        client = SnapshotClient(snapshot_dir)
+    else:
+        client = FPLClient(
+            auth_header=AUTH_HEADER,   # <-- carries your "x-api-authorization: Bearer …"
+            user_agent=USER_AGENT,
+            referer=REFERER,
+        )
+
     bootstrap = client.bootstrap()
     fixtures = client.fixtures()
     team_fixt_idx = build_team_fixture_index(fixtures)
     event_id = get_current_event(bootstrap)
-    entry = client.entry(args.team_id)
-    event_id, picks = resolve_picks_with_fallback(client, bootstrap, args.team_id, event_id)
+    entry = client.entry(team_id)
+
+    # FETCH PICKS with a PRE-DEADLINE FALLBACK:
+    # Try public picks; if they 404/401/403 before the deadline and you provided an auth token,
+    # fall back to your private /api/my-team/{entry}/ squad.
+    try:
+        event_id, picks = resolve_picks_with_fallback(client, bootstrap, team_id, event_id)
+    except requests.HTTPError as e:
+        status = getattr(e.response, "status_code", None)
+        if AUTH_HEADER and status in (401, 403, 404):
+            my = client.my_team(team_id)
+            picks = {"picks": my["picks"], "active_chip": my.get("active_chip")}
+        else:
+            raise
 
     elements={e["id"]:e for e in bootstrap["elements"]}
     team_by_id={t["id"]:t for t in bootstrap["teams"]}
@@ -98,7 +147,7 @@ def main():
     for p in picks["picks"]:
         el=elements[p["element"]]
         is_starter = p.get("position",0)<=11
-        exp = project_player_points(client, el, args.horizon, team_fixt_idx)
+        exp = project_player_points(client, el, horizon, team_fixt_idx)
         projs.append(PlayerProj(id=el["id"], name=el["web_name"], pos=el["element_type"], team=el["team"], cost=el["now_cost"]/10.0, exp_points=exp, starter=is_starter))
 
     captain, bench = suggest_captain_and_bench(projs)
@@ -107,8 +156,8 @@ def main():
     def fmt(p:PlayerProj)->str:
         return f"{p.name:<20} {POS_INV[p.pos]:<3} £{p.cost:>4.1f}  xPts:{p.exp_points:>5.2f}  Club:{team_by_id[p.team]['short_name']}"
 
-    print(f"\nFPL Bot Lite – Advisor for Team {args.team_id}")
-    print(f"Using GW {event_id} | Horizon {args.horizon} | Bank: £{bank:.1f}m\n")
+    print(f"\nFPL Bot Lite – Advisor for Team {team_id}")
+    print(f"Using GW {event_id} | Horizon {horizon} | Bank: £{bank:.1f}m\n")
 
     starters = sorted([p for p in projs if p.starter], key=lambda x: x.exp_points, reverse=True)
     print("Starters (sorted by projected points):")
@@ -121,5 +170,6 @@ def main():
     print("  ", fmt(captain))
 
     print("\nDone.")
+
 if __name__=='__main__':
     main()
