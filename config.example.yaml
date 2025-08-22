@@ -1,0 +1,44 @@
+# Example config for FPL Bot Planner
+
+# Team + horizon
+team_id: 41706
+horizon: 3          # How many future gameweeks to project
+
+# Optional snapshot dir (offline runs for testing)
+snapshot_dir: null
+
+# Authentication
+# Replace with your own fresh Bearer token + headers
+auth_header: "Bearer eyJ...."
+user_agent: "Mozilla/5.0 ..."
+referer: "https://fantasy.premierleague.com/my-team"
+
+# Transfers + planner knobs
+free_transfers: 1
+hit_penalty: 4
+shortlist: 80
+
+# Projection knobs
+regression_factor: 0.5     # blend recent vs baseline (0 = only recent, 1 = only baseline)
+min_baseline: 2.0          # per-fixture floor (avoids silly 0.1 projections)
+minutes_window: 6
+p60_floor: 0.4             # minimum chance of 60+ mins
+
+# Transfer filtering
+min_net_gain: 0.5          # only recommend if net gain after hits ≥ this
+min_raw_gain: 2.0          # must gain at least this raw before hits
+require_no_hit: false      # set true to forbid hit transfers
+gk_swap_min_gain: 8.0      # bench GK upgrades only if ≥ this
+bench_min_gain: 8.0        # bench upgrades must beat this threshold
+
+# Positional priors (rough FPL averages per game)
+pos_baselines:
+  1: 3.5   # GK
+  2: 3.0   # DEF
+  3: 4.8   # MID
+  4: 5.2   # FWD
+
+# Lock / avoid lists (by name or element id)
+lock_players: []
+avoid_players: []
+avoid_clubs: []
